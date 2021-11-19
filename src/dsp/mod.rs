@@ -8,18 +8,34 @@ use crate::plugin_state::StateUpdate;
 use std::sync::mpsc::Receiver;
 
 use vst::buffer::AudioBuffer;
+use std::collections::VecDeque;
+
+pub mod filter_kernal;
+pub mod convolution;
+use filter_kernal::FILTER_KERNAL;
+use convolution::convolve;
+use convolution::windowed_sinc_filter;
 
 /// Handles all audio processing algorithms for the plugin.
 pub(super) struct PluginDsp {
   amplitude: f32,
+  impulse_response: &'static[f32],
+  history_buffer: VecDeque<f32>,
   messages_from_params: Receiver<StateUpdate>,
 }
 
 impl PluginDsp {
   pub fn new(incoming_messages: Receiver<StateUpdate>) -> Self {
+    let mut history_buffer: VecDeque<f32> = VecDeque::new();
+    let impulse_response = &FILTER_KERNAL;
+    for _ in 0..impulse_response.len() {
+      history_buffer.push_front(0.0);
+    }
     Self {
       amplitude: 1.,
       messages_from_params: incoming_messages,
+      filter_kernal: impulse_response,
+      history_buffer: history_buffer,
     }
   }
 
@@ -33,14 +49,15 @@ impl PluginDsp {
       }
     }
 
-    let num_channels = buffer.input_count();
-    let num_samples = buffer.samples();
-    let (inputs, mut outputs) = buffer.split();
-    // Then, calculate each output sample by multiplying each input sample by its
-    // corresponding amplitude value.
-    for channel in 0..num_channels {
-      for i in 0..num_samples {
-        outputs[channel][i] = inputs[channel][i] * self.amplitude;
+    // the length of the history buffer should be impulse_response + buffer_length
+    while self.history_buffer.len() < self.impulse_response.len() + buffer.samples() {
+      self.history_buffer.push_back(0.0);
+    }
+
+    // do some convolving
+    for (input_buffer, output_buffer) in buffer.zip() {
+      for (input_sample, output_sample) in input_buffer.iter().zip(output_buffer) {
+        *output_sample = convolve(*input_sample, &self.impulse_response, &mut self.history_buffer);
       }
     }
   }
