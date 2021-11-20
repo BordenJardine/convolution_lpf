@@ -5,7 +5,7 @@
 //! processing and UI threads subscribe to parameter updates through cross-thread message passing.
 //!
 //! This plugin's long-term state only consists of a single floating-point value (the value of the
-//! amplitude knob), but it should be simple to extend this scheme to work with multiple knobs,
+//! cutoff knob), but it should be simple to extend this scheme to work with multiple knobs,
 //! toggles, node locations, waveforms, user-defined labels, and so on.
 
 use std::sync::{
@@ -68,7 +68,7 @@ impl PluginParameters for PluginState {
         match index {
             0 => format!(
                 "{:.2}",
-                self.state_record.lock().unwrap()[index as usize] * 2.
+                self.state_record.lock().unwrap()[index as usize]
             ),
             _ => unreachable!(),
         }
@@ -76,7 +76,7 @@ impl PluginParameters for PluginState {
 
     fn get_parameter_name(&self, index: i32) -> String {
         match index {
-            0 => "Amplitude",
+            0 => "Cutoff",
             _ => unreachable!(),
         }
         .to_string()
@@ -86,8 +86,8 @@ impl PluginParameters for PluginState {
         dbg!("Set string to parameter for {}, {}", index, &text);
         match index {
             0 => match text.parse::<f32>() {
-                Ok(value) if value <= 2. && value >= 0. => {
-                    self.set_parameter(index, value / 2.);
+                Ok(value) if value <= 1. && value >= 0. => {
+                    self.set_parameter(index, value);
                     true
                 }
                 _ => false,

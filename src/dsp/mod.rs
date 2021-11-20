@@ -4,37 +4,44 @@
 //! during audio processing. In particular, note that parameter smoothing is considered within the
 //! scope of audio processing rather than state management.
 
-use crate::plugin_state::StateUpdate;
 use std::sync::mpsc::Receiver;
-
-use vst::buffer::AudioBuffer;
 use std::collections::VecDeque;
+use vst::buffer::AudioBuffer;
+use crate::plugin_state::StateUpdate;
 
 pub mod filter_kernal;
 pub mod convolution;
-use filter_kernal::FILTER_KERNAL;
 use convolution::convolve;
 use convolution::windowed_sinc_filter;
 
+const KERNAL_LEN: usize = 29;
+const DEFAULT_CUTOFF: f32 = 0.5;
+
 /// Handles all audio processing algorithms for the plugin.
 pub(super) struct PluginDsp {
-  amplitude: f32,
-  impulse_response: &'static[f32],
-  history_buffer: VecDeque<f32>,
+  cutoff: f32,
   messages_from_params: Receiver<StateUpdate>,
+  filter_kernal: [f32; KERNAL_LEN],
+  history_buffer: VecDeque<f32>,
 }
 
 impl PluginDsp {
   pub fn new(incoming_messages: Receiver<StateUpdate>) -> Self {
+
+    // init the filter kernal
+    let mut filter_kernal: [f32; KERNAL_LEN] = [0.; KERNAL_LEN];
+    windowed_sinc_filter(DEFAULT_CUTOFF, &mut filter_kernal);
+
+    // init a buffer to hold on to the still-relevant samples during convolution
     let mut history_buffer: VecDeque<f32> = VecDeque::new();
-    let impulse_response = &FILTER_KERNAL;
-    for _ in 0..impulse_response.len() {
-      history_buffer.push_front(0.0);
+    for _ in 0..filter_kernal.len() {
+      history_buffer.push_front(0.);
     }
+
     Self {
-      amplitude: 1.,
+      cutoff: DEFAULT_CUTOFF,
       messages_from_params: incoming_messages,
-      filter_kernal: impulse_response,
+      filter_kernal: filter_kernal,
       history_buffer: history_buffer,
     }
   }
@@ -45,19 +52,22 @@ impl PluginDsp {
     // First, get any new changes to parameter ranges.
     while let Ok(message) = self.messages_from_params.try_recv() {
       match message {
-        StateUpdate::SetKnob(v) => self.amplitude = v,
+        StateUpdate::SetKnob(v) => {
+          self.cutoff = 1.4 * (v / 2.);
+          windowed_sinc_filter(self.cutoff, &mut self.filter_kernal);
+        },
       }
     }
 
-    // the length of the history buffer should be impulse_response + buffer_length
-    while self.history_buffer.len() < self.impulse_response.len() + buffer.samples() {
+    // verify length of the history buffer is the impulse_response + buffer_length
+    while self.history_buffer.len() < self.filter_kernal.len() + buffer.samples() {
       self.history_buffer.push_back(0.0);
     }
 
     // do some convolving
     for (input_buffer, output_buffer) in buffer.zip() {
       for (input_sample, output_sample) in input_buffer.iter().zip(output_buffer) {
-        *output_sample = convolve(*input_sample, &self.impulse_response, &mut self.history_buffer);
+        *output_sample = convolve(*input_sample, &self.filter_kernal, &mut self.history_buffer);
       }
     }
   }
