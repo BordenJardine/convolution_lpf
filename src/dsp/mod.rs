@@ -9,7 +9,6 @@ use std::collections::VecDeque;
 use vst::buffer::AudioBuffer;
 use crate::plugin_state::StateUpdate;
 
-pub mod filter_kernal;
 pub mod convolution;
 use convolution::convolve;
 use convolution::windowed_sinc_filter;

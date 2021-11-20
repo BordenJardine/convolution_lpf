@@ -23,6 +23,7 @@ pub enum StateUpdate {
     SetKnob(f32),
 }
 
+#[allow(dead_code)]
 pub struct PluginState {
     host: HostCallback,
     to_dsp: Mutex<Sender<StateUpdate>>,
