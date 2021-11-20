@@ -14,8 +14,8 @@ pub mod convolution;
 use convolution::convolve;
 use convolution::windowed_sinc_filter;
 
-const KERNAL_LEN: usize = 29;
-const DEFAULT_CUTOFF: f32 = 0.5;
+const KERNAL_LEN: usize = 63;
+const DEFAULT_CUTOFF: f32 = 0.25;
 
 /// Handles all audio processing algorithms for the plugin.
 pub(super) struct PluginDsp {
@@ -53,7 +53,10 @@ impl PluginDsp {
     while let Ok(message) = self.messages_from_params.try_recv() {
       match message {
         StateUpdate::SetKnob(v) => {
-          self.cutoff = 1.4 * (v / 2.);
+          // v will be a number between 0. and 1.
+          // cutoff should be a number between 0. and 0.5
+          // see comment of windowed_sinc_filter for why
+          self.cutoff = (v * v) / 2.;
           windowed_sinc_filter(self.cutoff, &mut self.filter_kernal);
         },
       }
@@ -61,11 +64,14 @@ impl PluginDsp {
 
     // verify length of the history buffer is the impulse_response + buffer_length
     while self.history_buffer.len() < self.filter_kernal.len() + buffer.samples() {
-      self.history_buffer.push_back(0.0);
+      self.history_buffer.push_back(0.);
     }
 
     // do some convolving
     for (input_buffer, output_buffer) in buffer.zip() {
+      // for history_sample in self.history_buffer.iter_mut() {
+      //   *history_sample = 0.0;
+      // }
       for (input_sample, output_sample) in input_buffer.iter().zip(output_buffer) {
         *output_sample = convolve(*input_sample, &self.filter_kernal, &mut self.history_buffer);
       }

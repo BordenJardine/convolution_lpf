@@ -9,10 +9,11 @@ pub fn convolve(
   impulse_response: &[f32],
   history_buffer: &mut VecDeque<f32>
 ) -> f32 {
+  let in_sample = input_sample / 3.;
   for (i, kernal_sample) in impulse_response.iter().enumerate() {
     match history_buffer.get_mut(i) {
-      Some(history_sample) => *history_sample += input_sample * kernal_sample,
-      None => return input_sample * kernal_sample
+      Some(history_sample) => *history_sample = math_stuff(*history_sample, in_sample, *kernal_sample),
+      None => ()
     }
   }
 
@@ -23,6 +24,11 @@ pub fn convolve(
     },
     None => return input_sample
   }
+}
+
+pub fn math_stuff( history_sample: f32, input_sample: f32, kernal_sample: f32) -> f32 {
+    let val = history_sample + input_sample * kernal_sample;
+    val
 }
 
 // cutoff_freq should be a number between 0 and 0.5
