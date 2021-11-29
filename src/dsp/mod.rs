@@ -13,7 +13,7 @@ pub mod convolution;
 use convolution::convolve;
 use convolution::windowed_sinc_filter;
 
-const KERNAL_LEN: usize = 1025;
+const KERNAL_LEN: usize = 127;
 const DEFAULT_CUTOFF: f32 = 0.25;
 
 /// Handles all audio processing algorithms for the plugin.
@@ -21,7 +21,7 @@ pub(super) struct PluginDsp {
   cutoff: f32,
   messages_from_params: Receiver<StateUpdate>,
   filter_kernal: [f32; KERNAL_LEN],
-  history_buffer: VecDeque<f32>,
+  history_buffers: Vec<VecDeque<f32>>,
 }
 
 impl PluginDsp {
@@ -32,16 +32,20 @@ impl PluginDsp {
     windowed_sinc_filter(DEFAULT_CUTOFF, &mut filter_kernal);
 
     // init a buffer to hold on to the still-relevant samples during convolution
-    let mut history_buffer: VecDeque<f32> = VecDeque::new();
-    for _ in 0..filter_kernal.len() {
-      history_buffer.push_front(0.);
+    let mut history_buffers = Vec::new();
+    for _ in 0..2 {
+      let mut history_buffer: VecDeque<f32> = VecDeque::new();
+      for _ in 0..filter_kernal.len() {
+        history_buffer.push_front(0.);
+      }
+      history_buffers.push(history_buffer);
     }
 
     Self {
       cutoff: DEFAULT_CUTOFF,
       messages_from_params: incoming_messages,
-      filter_kernal: filter_kernal,
-      history_buffer: history_buffer,
+      filter_kernal,
+      history_buffers
     }
   }
 
@@ -54,7 +58,7 @@ impl PluginDsp {
         StateUpdate::SetKnob(v) => {
           // v will be a number between 0. and 1.
           // cutoff should be a number between 0. and 0.5
-          // see comment of windowed_sinc_filter for why
+          // see comment of windowed_sinc_filter as to why
           self.cutoff = (v * v) / 2.;
           windowed_sinc_filter(self.cutoff, &mut self.filter_kernal);
         },
@@ -62,17 +66,24 @@ impl PluginDsp {
     }
 
     // verify length of the history buffer is the impulse_response + buffer_length
-    while self.history_buffer.len() < self.filter_kernal.len() + buffer.samples() {
-      self.history_buffer.push_back(0.);
+    //for mut history_buffer in self.history_buffers.iter() {
+    for i in 0..self.history_buffers.len() {
+      let history_buffer = &mut self.history_buffers[i];
+      while history_buffer.len() < self.filter_kernal.len() + buffer.samples() {
+        history_buffer.push_back(0.);
+      }
     }
 
     // do some convolving
+    let mut i = 0;
     for (input_buffer, output_buffer) in buffer.zip() {
       // for history_sample in self.history_buffer.iter_mut() {
       //   *history_sample = 0.0;
       // }
+      let history_buffer = &mut self.history_buffers[i];
+      i += 1;
       for (input_sample, output_sample) in input_buffer.iter().zip(output_buffer) {
-        *output_sample = convolve(*input_sample, &self.filter_kernal, &mut self.history_buffer);
+        *output_sample = convolve(*input_sample, &self.filter_kernal, history_buffer);
       }
     }
   }
