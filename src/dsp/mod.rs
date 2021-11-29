@@ -13,7 +13,7 @@ pub mod convolution;
 use convolution::convolve;
 use convolution::windowed_sinc_filter;
 
-const KERNAL_LEN: usize = 63;
+const KERNAL_LEN: usize = 1025;
 const DEFAULT_CUTOFF: f32 = 0.25;
 
 /// Handles all audio processing algorithms for the plugin.

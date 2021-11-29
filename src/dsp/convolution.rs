@@ -32,9 +32,8 @@ pub fn math_stuff( history_sample: f32, input_sample: f32, kernal_sample: f32) -
 }
 
 // cutoff_freq should be a number between 0 and 0.5
-// it represents a ratio of the sample frequency (44.1khz)
-// and we don't want to let the filter go above the nyquist freq
-// (sample rate * 0.5)
+// it represents a ratio of the sample frequency (e.g. 44.1khz)
+// and we don't want to let the filter go above the nyquist freq (sample rate * 0.5)
 pub fn windowed_sinc_filter(cutoff_freq: f32, filter_kernal: &mut [f32]) {
   let cutoff = cutoff_freq.clamp(0.0, 0.5);
   let len = filter_kernal.len();
@@ -53,29 +52,3 @@ pub fn windowed_sinc_filter(cutoff_freq: f32, filter_kernal: &mut [f32]) {
     }
   }
 }
-
-/*
-void lp_windowed_sinc_ftr(
-    double *fltr_kernel_dest_arr,
-    double cutoff_freq,
-    int filter_length,
-)
-{
-    for(int i = 0; i < filter_length; i++)
-    {
-        double offset = i - (filter_length / 2);
-        if(offset == 0)
-        {
-            // mid point
-            fltr_kernel_dest_arr[i] = 2 * M_PI * cutoff_freq;
-        }
-        if(offset != 0)
-        {
-            // sinc function
-            fltr_kernel_dest_arr[i] = sin(2 * M_PI * cutoff_freq * offset) / offset;
-            // hamming
-            fltr_kernel_dest_arr[i] = fltr_kernel_dest_arr[i] * (0.54-0.46*cos(2*M_PI*i/filter_length));
-        }
-    }
-}
- */
